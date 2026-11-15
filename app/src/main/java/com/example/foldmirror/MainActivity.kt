@@ -194,8 +194,12 @@ private fun stopFoldMonitor() {
         setContentView(ScrollView(this).apply {
             addView(layout)
         })
+        Shizuku.addBinderDeadListener(shizukuBinderDeadListener)
+Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener)
 
-        initShizuku()
+initShizuku()
+
+        
 
         displayManager.registerDisplayListener(
             displayListener,
@@ -672,22 +676,79 @@ private fun stopMirroring() {
         }
     }
 
-    private val shizukuPermissionListener =
-        Shizuku.OnRequestPermissionResultListener {
-                requestCode,
-                grantResult ->
+   private val shizukuPermissionListener =
+    Shizuku.OnRequestPermissionResultListener {
+        requestCode, grantResult ->
 
-            if (requestCode != SHIZUKU_REQUEST_CODE) {
-                return@OnRequestPermissionResultListener
-            }
+        if (requestCode != SHIZUKU_REQUEST_CODE) {
+            return@OnRequestPermissionResultListener
+        }
+
+        if (grantResult == PackageManager.PERMISSION_GRANTED) {
+
+            captureStatus.text = "Shizuku permission granted."
+
+            if (resetStateWhenShizukuReturns) {
+    requestDeviceState("reset")
+}
+
+        } else {
+            captureStatus.text = "Shizuku permission denied."
+        }
+    }
+
+        // ---------------------------------------------------------
+// SHIZUKU CONNECTION MONITORING
+// ---------------------------------------------------------
+
+private var resetStateWhenShizukuReturns = false
+
+// Called when Shizuku disconnects or its process dies.
+private val shizukuBinderDeadListener =
+    Shizuku.OnBinderDeadListener {
+
+        Log.w(TAG, "Shizuku binder disconnected")
+
+        if (serviceBound || isStartingMirroring || mirrorPresentation != null) {
+
+            resetStateWhenShizukuReturns = true
 
             captureStatus.text =
-                if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                    "Shizuku permission granted."
-                } else {
-                    "Shizuku permission denied."
-                }
+                "Shizuku disconnected. Stopping mirroring..."
+
+            stopMirroring()
+
+        } else {
+
+            captureStatus.text = "Shizuku disconnected."
         }
+    }
+
+// Called when Shizuku becomes available again.
+private val shizukuBinderReceivedListener =
+    Shizuku.OnBinderReceivedListener {
+
+        Log.i(TAG, "Shizuku binder connected")
+
+        if (resetStateWhenShizukuReturns) {
+
+            if (Shizuku.checkSelfPermission() ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                captureStatus.text = "Restoring normal display state..."
+
+                requestDeviceState("reset")
+
+            } else {
+                captureStatus.text = "Shizuku permission required for display recovery."
+
+                Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
+            }
+
+        } else {
+            captureStatus.text = "Shizuku connected."
+        }
+    }
 
     private fun requestDeviceState(state: String) {
 
@@ -744,12 +805,19 @@ private fun stopMirroring() {
 
                 runOnUiThread {
 
-                    captureStatus.text =
-                        if (exitCode == 0) {
-                            "Device state command succeeded: $output"
-                        } else {
-                            "Device state command failed: $output"
-                        }
+                    if (exitCode == 0) {
+
+    if (state == "reset") {
+        resetStateWhenShizukuReturns = false
+    }
+
+    captureStatus.text =
+        "Device state command succeeded: $output"
+
+} else {
+    captureStatus.text =
+        "Device state command failed: $output"
+}
 
                     refreshDisplays()
                 }
@@ -872,6 +940,8 @@ private fun stopMirroring() {
     Shizuku.removeRequestPermissionResultListener(
         shizukuPermissionListener
     )
+    Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
+Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener)
 
     super.onDestroy()
 }
