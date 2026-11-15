@@ -188,13 +188,14 @@ private var foldMonitorRunning = false
                         null -> foldMonitorHandler.postDelayed(this, 1500)
 
                         else -> {
-                            if (serviceBound) {
-                                Log.i(TAG, "Device folded. Stopping mirroring.")
-                                stopMirroring()
-                            } else {
-                                foldMonitorHandler.postDelayed(this, 1000)
-                            }
-                        }
+    if (serviceBound || isStartingMirroring) {
+        Log.i(TAG, "Device folded. Stopping mirroring.")
+
+        stopMirroring()
+    }
+
+    foldMonitorHandler.postDelayed(this, 1000)
+}
                     }
                 }
             }.start()
