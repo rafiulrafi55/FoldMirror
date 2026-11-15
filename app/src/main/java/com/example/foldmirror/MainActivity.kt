@@ -446,25 +446,59 @@ class MainActivity : Activity() {
     // STOP MIRRORING
     // ---------------------------------------------------------
 
-    private fun stopMirroring() {
+   
 
+private fun stopMirroring() {
+
+    Log.i(TAG, "Stop Mirroring requested")
+
+    // Detach the mirror surface.
+    try {
+        captureService?.setMirrorSurface(null, 0, 0, 0)
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to detach mirror surface", e)
+    }
+
+    // Dismiss the cover Presentation.
+    try {
         mirrorPresentation?.dismiss()
-        mirrorPresentation = null
-        mirrorDisplayId = -1
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to dismiss Presentation", e)
+    }
 
-        if (serviceBound) {
+    mirrorPresentation = null
+    mirrorDisplayId = -1
+
+    // Stop the capture service.
+    stopService(Intent(this, CaptureService::class.java))
+
+    // Unbind from the service.
+    if (serviceBound) {
+        try {
             unbindService(serviceConnection)
-            serviceBound = false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to unbind CaptureService", e)
         }
 
-        captureService = null
-
-        stopService(
-            Intent(this, CaptureService::class.java)
-        )
-
-        captureStatus.text = "Mirroring stopped."
+        serviceBound = false
     }
+
+    captureService = null
+
+    captureStatus.text = "Mirroring stopped. Resetting device state..."
+
+    // Allow the capture service to finish releasing its resources.
+    Handler(Looper.getMainLooper()).postDelayed({
+
+        Log.i(TAG, "Resetting Samsung device state")
+
+        // Restore Samsung's automatic display state.
+        requestDeviceState("reset")
+
+    }, 500)
+}
+
+
 
     // ---------------------------------------------------------
     // SHIZUKU
