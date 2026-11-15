@@ -68,6 +68,35 @@ private var foldMonitorRunning = false
             }
         )
     }
+    private fun getCurrentBaseState(): Int? {
+    return try {
+        val service = IShizukuService.Stub.asInterface(
+            Shizuku.getBinder()
+        )
+
+        val process = service.newProcess(
+            arrayOf("dumpsys", "device_state"),
+            null,
+            null
+        )
+
+        val output = process.getInputStream().use {
+            ParcelFileDescriptor.AutoCloseInputStream(it)
+                .bufferedReader()
+                .use { reader -> reader.readText() }
+        }
+
+        process.waitFor()
+
+        Regex(
+            """mBaseState=Optional\[DeviceState\{identifier=(\d+)"""
+        ).find(output)?.groupValues?.get(1)?.toIntOrNull()
+
+    } catch (e: Exception) {
+        Log.e(TAG, "Unable to check fold state", e)
+        null
+    }
+}
 
 
     private fun logEvent(level: String, message: String) {
@@ -352,11 +381,50 @@ refreshDisplays()
 
     captureStatus.text = getString(R.string.enabling_concurrent_display)
 
-    Thread {
-        try {
-            val service = IShizukuService.Stub.asInterface(
-                Shizuku.getBinder()
-            )
+
+        Thread {
+    try {
+
+        // Check the physical fold state before changing anything.
+        val currentState = getCurrentBaseState()
+
+        if (currentState == 0) {
+            runOnUiThread {
+                isStartingMirroring = false
+
+                captureStatus.text =
+                    "Device is folded. Unfold your device before mirroring."
+
+                logEvent(
+                    "WARNING",
+                    "Mirroring blocked: Device is folded."
+                )
+
+                updateFoldStatus(currentState)
+            }
+
+            return@Thread
+        }
+
+        if (currentState == null) {
+            runOnUiThread {
+                isStartingMirroring = false
+
+                captureStatus.text =
+                    "Unable to determine fold state. Mirroring cancelled."
+
+                logEvent(
+                    "ERROR",
+                    "Could not verify fold state. Startup cancelled."
+                )
+            }
+
+            return@Thread
+        }
+
+        val service = IShizukuService.Stub.asInterface(
+            Shizuku.getBinder()
+        )
 
             val process = service.newProcess(
                 arrayOf("cmd", "device_state", "state", "4"),
