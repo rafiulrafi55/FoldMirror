@@ -2899,6 +2899,7 @@ drawable abc_textfield_search_material
 drawable abc_vector_test
 drawable avd_hide_password
 drawable avd_show_password
+drawable bg_status_ready
 drawable btn_checkbox_checked_mtrl
 drawable btn_checkbox_checked_to_unchecked_mtrl_animation
 drawable btn_checkbox_unchecked_mtrl
@@ -3081,6 +3082,7 @@ id all
 id always
 id animateToEnd
 id animateToStart
+id appStatus
 id arc
 id asConfigured
 id async
@@ -3095,6 +3097,9 @@ id beginning
 id blocking
 id bottom
 id bounce
+id btnRefresh
+id btnStart
+id btnStop
 id buttonPanel
 id cancel_button
 id center
@@ -3180,6 +3185,7 @@ id fitXY
 id fixed
 id flip
 id floating
+id foldStatus
 id forever
 id fragment_container_view_tag
 id fullscreen_header
@@ -3248,6 +3254,7 @@ id matrix
 id message
 id middle
 id mini
+id mirrorStatus
 id month_grid
 id month_navigation_bar
 id month_navigation_fragment_toggle
@@ -3332,6 +3339,7 @@ id radio
 id ratio
 id rectangles
 id report_drawn
+id resultText
 id reverseSawtooth
 id right
 id rightToLeft
@@ -3362,6 +3370,7 @@ id search_voice_btn
 id select_dialog_listview
 id selected
 id selection_type
+id shizukuStatus
 id shortcut
 id showCustom
 id showHome
@@ -3408,6 +3417,9 @@ id tag_transition_group
 id tag_unhandled_key_event_manager
 id tag_unhandled_key_listeners
 id tag_window_insets_animation_callback
+id terminalLive
+id terminalScroll
+id terminalText
 id text
 id text2
 id textEnd
@@ -3574,6 +3586,7 @@ layout abc_search_dropdown_item_icons_2line
 layout abc_search_view
 layout abc_select_dialog_material
 layout abc_tooltip
+layout activity_main
 layout custom_dialog
 layout design_bottom_navigation_item
 layout design_bottom_sheet_dialog
@@ -3703,11 +3716,20 @@ string character_counter_content_description
 string character_counter_overflowed_content_description
 string character_counter_pattern
 string clear_text_end_icon_content_description
+string concurrent_display
+string concurrent_display_failed
+string device_state_error
+string device_state_failed
+string device_state_requesting
+string device_state_success
+string enabling_concurrent_display
 string error_a11y_label
 string error_icon_content_description
 string exposed_dropdown_menu_content_description
 string fab_transformation_scrim_behavior
 string fab_transformation_sheet_behavior
+string folded
+string half_open
 string hide_bottom_view_on_scroll_behavior
 string icon_content_description
 string item_view_role_description
@@ -3749,6 +3771,7 @@ string material_timepicker_minute
 string material_timepicker_pm
 string material_timepicker_select_time
 string material_timepicker_text_input_mode_description
+string mirroring_already_active
 string mtrl_badge_numberless_content_description
 string mtrl_checkbox_button_icon_path_checked
 string mtrl_checkbox_button_icon_path_group_name
@@ -3816,13 +3839,22 @@ string path_password_eye
 string path_password_eye_mask_strike_through
 string path_password_eye_mask_visible
 string path_password_strike_through
+string requesting_capture_permission
 string search_menu_title
 string searchbar_scrolling_view_behavior
 string searchview_clear_text_content_description
 string searchview_navigation_content_description
+string shizuku_connected
+string shizuku_disconnected
+string shizuku_error
+string shizuku_permission_required
 string side_sheet_accessibility_pane_title
 string side_sheet_behavior
 string status_bar_notification_info_overflow
+string tent_mode
+string unfolded
+string unknown
+string unknown_error
 style AlertDialog_AppCompat
 style AlertDialog_AppCompat_Light
 style Animation_AppCompat_Dialog

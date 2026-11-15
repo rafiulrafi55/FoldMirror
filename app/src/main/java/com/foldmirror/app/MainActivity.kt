@@ -20,20 +20,30 @@ import android.util.Log
 import android.view.Display
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.FrameLayout
 import androidx.core.content.ContextCompat
 import moe.shizuku.server.IShizukuService
 import rikka.shizuku.Shizuku
+import com.foldmirror.app.databinding.ActivityMainBinding
+import android.graphics.Color
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : Activity() {
 
     private lateinit var displayManager: DisplayManager
-    private lateinit var resultText: TextView
-    private lateinit var captureStatus: TextView
+    private lateinit var binding: ActivityMainBinding
+    private val captureStatus: TextView
+    get() = binding.mirrorStatus
+
+
+private val resultText: TextView
+    get() = binding.resultText
 
     private var captureService: CaptureService? = null
     private var serviceBound = false
@@ -45,56 +55,123 @@ class MainActivity : Activity() {
     private val foldMonitorHandler = Handler(Looper.getMainLooper())
 private var foldMonitorRunning = false
 
-private val foldMonitorRunnable = object : Runnable {
-    override fun run() {
-        if (!foldMonitorRunning || !serviceBound) return
 
-        Thread {
-            var baseState: Int? = null
+    private fun updateFoldStatus(baseState: Int?) {
+        binding.foldStatus.text = getString(
+            when (baseState) {
+                0 -> R.string.folded
+                1 -> R.string.tent_mode
+                2 -> R.string.half_open
+                3 -> R.string.unfolded
+                4 -> R.string.concurrent_display
+                else -> R.string.unknown
+            }
+        )
+    }
 
-            try {
-                val service = IShizukuService.Stub.asInterface(
-                    Shizuku.getBinder()
-                )
 
-                val process = service.newProcess(
-                    arrayOf("dumpsys", "device_state"),
-                    null,
-                    null
-                )
+    private fun logEvent(level: String, message: String) {
+        runOnUiThread {
+            val timestamp = SimpleDateFormat(
+                "HH:mm:ss",
+                Locale.getDefault()
+            ).format(Date())
 
-                val output = process.getInputStream().use {
-                    ParcelFileDescriptor.AutoCloseInputStream(it)
-                        .bufferedReader().use { reader -> reader.readText() }
-                }
-
-                process.waitFor()
-
-                baseState = Regex(
-                    """mBaseState=Optional\[DeviceState\{identifier=(\d+)"""
-                ).find(output)?.groupValues?.get(1)?.toIntOrNull()
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Fold detection failed", e)
+            val color = when (level.uppercase()) {
+                "SUCCESS" -> Color.rgb(101, 214, 165)
+                "WARNING" -> Color.rgb(255, 193, 7)
+                "ERROR" -> Color.rgb(255, 100, 100)
+                else -> Color.rgb(130, 180, 255)
             }
 
-            runOnUiThread {
-                if (!foldMonitorRunning || !serviceBound) return@runOnUiThread
+            val logLine = SpannableString(
+                "[$timestamp] [$level] $message\n"
+            )
 
-                when (baseState) {
-                    3 -> foldMonitorHandler.postDelayed(this, 1000)
+            logLine.setSpan(
+                ForegroundColorSpan(color),
+                0,
+                logLine.length,
+                Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
 
-                    null -> foldMonitorHandler.postDelayed(this, 1500)
+            binding.terminalText.append(logLine)
 
-                    else -> {
-                        Log.i(TAG, "Device folded. Stopping mirroring.")
-                        stopMirroring()
+            // Keep terminal size under control.
+            val terminalContent = binding.terminalText.text
+
+            if (terminalContent.length > 12000) {
+                binding.terminalText.text = terminalContent.subSequence(
+                    terminalContent.length - 9000,
+                    terminalContent.length
+                )
+            }
+
+            binding.terminalScroll.post {
+                binding.terminalScroll.fullScroll(
+                    android.view.View.FOCUS_DOWN
+                )
+            }
+        }
+    }
+
+    private val foldMonitorRunnable = object : Runnable {
+        override fun run() {
+            if (!foldMonitorRunning) return
+
+            Thread {
+                var baseState: Int? = null
+
+                try {
+                    val service = IShizukuService.Stub.asInterface(
+                        Shizuku.getBinder()
+                    )
+
+                    val process = service.newProcess(
+                        arrayOf("dumpsys", "device_state"),
+                        null,
+                        null
+                    )
+
+                    val output = process.getInputStream().use {
+                        ParcelFileDescriptor.AutoCloseInputStream(it)
+                            .bufferedReader().use { reader -> reader.readText() }
+                    }
+
+                    process.waitFor()
+
+                    baseState = Regex(
+                        """mBaseState=Optional\[DeviceState\{identifier=(\d+)"""
+                    ).find(output)?.groupValues?.get(1)?.toIntOrNull()
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "Fold detection failed", e)
+                }
+
+                runOnUiThread {
+                    if (!foldMonitorRunning) return@runOnUiThread
+
+                    updateFoldStatus(baseState)
+
+                    when (baseState) {
+                        3 -> foldMonitorHandler.postDelayed(this, 1000)
+
+                        null -> foldMonitorHandler.postDelayed(this, 1500)
+
+                        else -> {
+                            if (serviceBound) {
+                                Log.i(TAG, "Device folded. Stopping mirroring.")
+                                stopMirroring()
+                            } else {
+                                foldMonitorHandler.postDelayed(this, 1000)
+                            }
+                        }
                     }
                 }
-            }
-        }.start()
+            }.start()
+        }
     }
-}
+
 
 private fun startFoldMonitor() {
     if (foldMonitorRunning) return
@@ -103,7 +180,18 @@ private fun startFoldMonitor() {
     foldMonitorHandler.post(foldMonitorRunnable)
 }
 
-private fun stopFoldMonitor() {
+
+    private fun updateShizukuStatus() {
+        binding.shizukuStatus.text = getString(
+            if (Shizuku.pingBinder()) {
+                R.string.shizuku_connected
+            } else {
+                R.string.shizuku_disconnected
+            }
+        )
+    }
+
+    private fun stopFoldMonitor() {
     foldMonitorRunning = false
     foldMonitorHandler.removeCallbacks(foldMonitorRunnable)
 }
@@ -135,78 +223,47 @@ private fun stopFoldMonitor() {
         displayManager =
             getSystemService(DISPLAY_SERVICE) as DisplayManager
 
-        resultText = TextView(this).apply {
-            textSize = 14f
-            setPadding(24, 24, 24, 24)
-            text = "Detecting displays..."
-        }
+        binding = ActivityMainBinding.inflate(layoutInflater)
+setContentView(binding.root)
+        binding.terminalText.text = ""
 
-        captureStatus = TextView(this).apply {
-            text = "Capture idle."
-            setPadding(24, 12, 24, 12)
-        }
+        logEvent("SUCCESS", "FoldMirror initialized")
+        logEvent("INFO", "Initializing system services...")
 
-        val refreshButton = Button(this).apply {
-            text = "Refresh Display Information"
-            setOnClickListener { refreshDisplays() }
-        }
+// Start mirroring
+binding.btnStart.setOnClickListener {
+    startMirrorToCover()
+}
 
-        val mirrorButton = Button(this).apply {
-            text = "Start Mirroring to Cover"
-            setOnClickListener { startMirrorToCover() }
-        }
+// Stop mirroring
+binding.btnStop.setOnClickListener {
+    stopMirroring()
+}
 
-        val stopButton = Button(this).apply {
-            text = "Stop Mirroring"
-            setOnClickListener { stopMirroring() }
-        }
-
-        val concurrentStateButton = Button(this).apply {
-            text = "Request Concurrent Display State"
-            setOnClickListener { requestDeviceState("4") }
-        }
-
-        val resetStateButton = Button(this).apply {
-            text = "Reset Device State"
-            setOnClickListener { requestDeviceState("reset") }
-        }
-
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-
-            addView(refreshButton)
-            addView(mirrorButton)
-            addView(stopButton)
-            addView(concurrentStateButton)
-            addView(resetStateButton)
-            addView(captureStatus)
-
-            addView(
-                resultText,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    0,
-                    1f
-                )
-            )
-        }
-
-        setContentView(ScrollView(this).apply {
-            addView(layout)
-        })
-        Shizuku.addBinderDeadListener(shizukuBinderDeadListener)
+// Refresh display information
+binding.btnRefresh.setOnClickListener {
+    refreshDisplays()
+}
+        logEvent("INFO", "Shizuku initialization requested")
+Shizuku.addBinderDeadListener(shizukuBinderDeadListener)
 Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener)
 
 initShizuku()
 
-        
+        if (
+            Shizuku.pingBinder() &&
+            Shizuku.checkSelfPermission() ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            startFoldMonitor()
+        }
 
-        displayManager.registerDisplayListener(
-            displayListener,
-            Handler(Looper.getMainLooper())
-        )
+displayManager.registerDisplayListener(
+    displayListener,
+    Handler(Looper.getMainLooper())
+)
 
-        refreshDisplays()
+refreshDisplays()
     }
 
     // ---------------------------------------------------------
@@ -226,6 +283,7 @@ initShizuku()
             if (binder == null) {
     isStartingMirroring = false
     captureStatus.text = "Invalid CaptureService binder."
+                logEvent("ERROR", "Invalid CaptureService binder")
     stopMirroring()
     return
 }
@@ -235,6 +293,8 @@ initShizuku()
             isStartingMirroring = false
 
             captureStatus.text = "Capture service connected. Preparing cover display..."
+            logEvent("SUCCESS", "CaptureService connected")
+            logEvent("INFO", "Preparing cover display presentation...")
 
             // Show the Presentation only after the service is available.
             tryMirrorPresentation()
@@ -244,6 +304,7 @@ initShizuku()
             serviceBound = false
             captureService = null
             isStartingMirroring = false
+            logEvent("WARNING", "CaptureService disconnected")
 
             captureStatus.text = "Capture service disconnected."
         }
@@ -269,9 +330,11 @@ initShizuku()
     // ---------------------------------------------------------
 
     private fun startMirrorToCover() {
+        logEvent("INFO", "Mirror startup requested")
 
     if (isStartingMirroring || serviceBound) {
-    captureStatus.text = "Mirroring is already starting or active."
+        logEvent("WARNING", "Mirroring is already starting or active")
+    captureStatus.text = getString(R.string.mirroring_already_active)
     return
 }
     
@@ -279,13 +342,15 @@ initShizuku()
     if (!Shizuku.pingBinder() ||
         Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED
     ) {
-        captureStatus.text = "Shizuku permission required."
+        logEvent("WARNING", "Cannot start mirroring: Shizuku permission required")
+        captureStatus.text = getString(R.string.shizuku_permission_required)
         Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
         return
     }
     isStartingMirroring = true
+        logEvent("INFO", "Enabling concurrent display state...")
 
-    captureStatus.text = "Enabling concurrent display..."
+    captureStatus.text = getString(R.string.enabling_concurrent_display)
 
     Thread {
         try {
@@ -308,10 +373,13 @@ initShizuku()
 
             runOnUiThread {
                 if (exitCode == 0) {
-                    captureStatus.text = "Requesting screen capture permission..."
+                    logEvent("SUCCESS", "Concurrent display state enabled")
+                    logEvent("INFO", "Requesting screen capture permission...")
+                    captureStatus.text = getString(R.string.requesting_capture_permission)
                     requestScreenCapturePermission()
                 } else {
                     captureStatus.text = "Failed to enable concurrent display: $output"
+                    logEvent("ERROR", "Failed to enable concurrent display: $output")
                     isStartingMirroring = false
                 }
             }
@@ -320,6 +388,7 @@ initShizuku()
             
             isStartingMirroring = false
             runOnUiThread {
+                logEvent("ERROR", "Device state error: ${e.message}")
                 captureStatus.text = "Device state error: ${e.message}"
             }
         }
@@ -339,11 +408,13 @@ initShizuku()
 
         if (resultCode != RESULT_OK || data == null) {
     captureStatus.text = "Permission denied. Resetting device state..."
+            logEvent("WARNING", "Screen capture permission denied or cancelled")
     isStartingMirroring = false
 
     requestDeviceState("reset")
     return
 }
+        logEvent("SUCCESS", "Screen capture permission granted")
 
         try {
 
@@ -402,6 +473,7 @@ requestDeviceState("reset")
 
         if (!serviceBound || captureService == null) {
             Log.w(TAG, "CaptureService is not ready")
+            logEvent("WARNING", "CaptureService is not ready for presentation")
             return
         }
 
@@ -412,17 +484,20 @@ requestDeviceState("reset")
 
         if (cover == null) {
             captureStatus.text = "No secondary presentation display found."
+            logEvent("ERROR", "No secondary presentation display found")
             return
         }
 
         if (cover.displayId == Display.DEFAULT_DISPLAY) {
             captureStatus.text = "Secondary display not found."
+            logEvent("ERROR", "Secondary display identification failed")
             return
         }
 
         if (cover.state != Display.STATE_ON) {
             captureStatus.text =
                 "Cover display is not ON. State=${cover.state}"
+            logEvent("WARNING", "Cover display is not ON. State=${cover.state}")
             return
         }
 
@@ -450,6 +525,7 @@ requestDeviceState("reset")
 
             captureStatus.text =
                 "Cover display connected. Starting mirror..."
+            logEvent("SUCCESS", "Cover presentation displayed on display ${cover.displayId}.")
 
             Log.i(
                 TAG,
@@ -460,6 +536,7 @@ requestDeviceState("reset")
 Log.e(TAG, "Failed to show cover Presentation", e)
 
 captureStatus.text = "Presentation failed: ${e.message}"
+            logEvent("ERROR", "Presentation failed: ${e.message}")
 
 stopMirroring()
 
@@ -474,6 +551,8 @@ stopMirroring()
         private lateinit var surfaceView: SurfaceView
 
         private var coverDensity = 0
+        private var lastLoggedWidth = -1
+        private var lastLoggedHeight = -1
 
         override fun onCreate(savedInstanceState: Bundle?) {
 
@@ -535,6 +614,8 @@ stopMirroring()
                             0,
                             0
                         )
+                        lastLoggedWidth = -1
+                        lastLoggedHeight = -1
                     }
                 }
             )
@@ -569,6 +650,12 @@ stopMirroring()
                 height,
                 coverDensity
             )
+
+            if (width != lastLoggedWidth || height != lastLoggedHeight) {
+                logEvent("SUCCESS", "Mirror surface attached: ${width}x${height}")
+                lastLoggedWidth = width
+                lastLoggedHeight = height
+            }
         }
 
         override fun onStop() {
@@ -594,23 +681,31 @@ private fun stopMirroring() {
     
 
     Log.i(TAG, "Stop Mirroring requested")
+    logEvent("INFO","Stop Mirroring requested...")
     isStartingMirroring = false
-    stopFoldMonitor()
+
     
 
     // Detach the mirror surface.
     try {
         captureService?.setMirrorSurface(null, 0, 0, 0)
+
+
+
     } catch (e: Exception) {
         Log.e(TAG, "Failed to detach mirror surface", e)
+        logEvent("WARNING","Failed to detach mirror surface")
     }
+
 
     // Dismiss the cover Presentation.
     try {
         mirrorPresentation?.dismiss()
     } catch (e: Exception) {
         Log.e(TAG, "Failed to dismiss Presentation", e)
+        logEvent("WARNING","Failed to dismiss Presentation")
     }
+
 
     mirrorPresentation = null
     mirrorDisplayId = -1
@@ -624,6 +719,7 @@ private fun stopMirroring() {
             unbindService(serviceConnection)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to unbind CaptureService", e)
+            logEvent("WARNING","Failed to unbind CaptureService")
         }
 
         serviceBound = false
@@ -632,14 +728,17 @@ private fun stopMirroring() {
     captureService = null
 
     captureStatus.text = "Mirroring stopped. Resetting device state..."
+    logEvent("SUCCESS","Mirroring stopped")
 
     // Allow the capture service to finish releasing its resources.
     Handler(Looper.getMainLooper()).postDelayed({
 
         Log.i(TAG, "Resetting Samsung device state")
+        logEvent("INFO","Resetting Samsung device state...")
 
         // Restore Samsung's automatic display state.
         requestDeviceState("reset")
+        logEvent("SUCCESS","Samsung device state restored")
 
     }, 500)
 }
@@ -650,19 +749,24 @@ private fun stopMirroring() {
     // SHIZUKU
     // ---------------------------------------------------------
 
+
     private fun initShizuku() {
 
         if (!Shizuku.pingBinder()) {
-            captureStatus.text = "Shizuku unavailable."
+            captureStatus.text = "Shizuku unavailable"
+            logEvent("WARNING", "Shizuku service is unavailable")
+            updateShizukuStatus()
             return
         }
+
+        updateShizukuStatus()
 
         if (
             Shizuku.checkSelfPermission() !=
             PackageManager.PERMISSION_GRANTED
         ) {
-
             captureStatus.text = "Requesting Shizuku permission..."
+            logEvent("INFO", "Requesting Shizuku permission")
 
             Shizuku.addRequestPermissionResultListener(
                 shizukuPermissionListener
@@ -671,22 +775,26 @@ private fun stopMirroring() {
             Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
 
         } else {
-
             captureStatus.text = "Shizuku connected."
+            logEvent("SUCCESS", "Shizuku is connected and permission is granted")
         }
     }
 
-   private val shizukuPermissionListener =
+
+    private val shizukuPermissionListener =
     Shizuku.OnRequestPermissionResultListener {
         requestCode, grantResult ->
 
         if (requestCode != SHIZUKU_REQUEST_CODE) {
             return@OnRequestPermissionResultListener
         }
+        updateShizukuStatus()
 
         if (grantResult == PackageManager.PERMISSION_GRANTED) {
 
             captureStatus.text = "Shizuku permission granted."
+            logEvent("SUCCESS", "Shizuku permission granted")
+            startFoldMonitor()
 
             if (resetStateWhenShizukuReturns) {
     requestDeviceState("reset")
@@ -694,6 +802,7 @@ private fun stopMirroring() {
 
         } else {
             captureStatus.text = "Shizuku permission denied."
+            logEvent("WARNING", "Shizuku permission denied")
         }
     }
 
@@ -708,6 +817,8 @@ private val shizukuBinderDeadListener =
     Shizuku.OnBinderDeadListener {
 
         Log.w(TAG, "Shizuku binder disconnected")
+        logEvent("WARNING", "Shizuku binder disconnected")
+        updateShizukuStatus()
 
         if (serviceBound || isStartingMirroring || mirrorPresentation != null) {
 
@@ -729,6 +840,8 @@ private val shizukuBinderReceivedListener =
     Shizuku.OnBinderReceivedListener {
 
         Log.i(TAG, "Shizuku binder connected")
+        logEvent("SUCCESS", "Shizuku binder connected")
+        updateShizukuStatus()
 
         if (resetStateWhenShizukuReturns) {
 
@@ -769,7 +882,10 @@ private val shizukuBinderReceivedListener =
             return
         }
 
-        captureStatus.text = "Requesting device state $state..."
+        captureStatus.text = getString(
+            R.string.device_state_requesting,
+            state
+        )
 
         Thread {
 
@@ -811,12 +927,16 @@ private val shizukuBinderReceivedListener =
         resetStateWhenShizukuReturns = false
     }
 
-    captureStatus.text =
-        "Device state command succeeded: $output"
+                        captureStatus.text = getString(
+                            R.string.device_state_success,
+                            output
+                        )
 
 } else {
-    captureStatus.text =
-        "Device state command failed: $output"
+                        captureStatus.text = getString(
+                            R.string.device_state_failed,
+                            output
+                        )
 }
 
                     refreshDisplays()
@@ -827,13 +947,17 @@ private val shizukuBinderReceivedListener =
                 Log.e(TAG, "Shizuku command failed", e)
 
                 runOnUiThread {
-                    captureStatus.text =
-                        "Shizuku error: ${e.message}"
+                    captureStatus.text = getString(
+                        R.string.shizuku_error,
+                        e.message ?: getString(R.string.unknown_error)
+                    )
                 }
             }
 
         }.start()
     }
+
+
 
     // ---------------------------------------------------------
     // DISPLAY DIAGNOSTICS
@@ -934,6 +1058,7 @@ private val shizukuBinderReceivedListener =
     // ---------------------------------------------------------
 
     override fun onDestroy() {
+        stopFoldMonitor()
     stopMirroring()
 
     displayManager.unregisterDisplayListener(displayListener)
