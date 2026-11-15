@@ -41,6 +41,72 @@ class MainActivity : Activity() {
     private var mirrorPresentation: CoverMirrorPresentation? = null
     private var mirrorDisplayId = -1
 
+    private val foldMonitorHandler = Handler(Looper.getMainLooper())
+private var foldMonitorRunning = false
+
+private val foldMonitorRunnable = object : Runnable {
+    override fun run() {
+        if (!foldMonitorRunning || !serviceBound) return
+
+        Thread {
+            var baseState: Int? = null
+
+            try {
+                val service = IShizukuService.Stub.asInterface(
+                    Shizuku.getBinder()
+                )
+
+                val process = service.newProcess(
+                    arrayOf("dumpsys", "device_state"),
+                    null,
+                    null
+                )
+
+                val output = process.getInputStream().use {
+                    ParcelFileDescriptor.AutoCloseInputStream(it)
+                        .bufferedReader().use { reader -> reader.readText() }
+                }
+
+                process.waitFor()
+
+                baseState = Regex(
+                    """mBaseState=Optional\[DeviceState\{identifier=(\d+)"""
+                ).find(output)?.groupValues?.get(1)?.toIntOrNull()
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Fold detection failed", e)
+            }
+
+            runOnUiThread {
+                if (!foldMonitorRunning || !serviceBound) return@runOnUiThread
+
+                when (baseState) {
+                    3 -> foldMonitorHandler.postDelayed(this, 1000)
+
+                    null -> foldMonitorHandler.postDelayed(this, 1500)
+
+                    else -> {
+                        Log.i(TAG, "Device folded. Stopping mirroring.")
+                        stopMirroring()
+                    }
+                }
+            }
+        }.start()
+    }
+}
+
+private fun startFoldMonitor() {
+    if (foldMonitorRunning) return
+
+    foldMonitorRunning = true
+    foldMonitorHandler.post(foldMonitorRunnable)
+}
+
+private fun stopFoldMonitor() {
+    foldMonitorRunning = false
+    foldMonitorHandler.removeCallbacks(foldMonitorRunnable)
+}
+
     private val displayListener = object : DisplayManager.DisplayListener {
 
         override fun onDisplayAdded(displayId: Int) {
@@ -174,27 +240,76 @@ class MainActivity : Activity() {
     }
 
     // ---------------------------------------------------------
+    // SCREEN CAPTURE PERMISSION HANDLING
+    // ---------------------------------------------------------
+
+    private fun requestScreenCapturePermission() {
+
+    val manager =
+        getSystemService(MediaProjectionManager::class.java)
+
+    startActivityForResult(
+        manager.createScreenCaptureIntent(),
+        SCREEN_CAPTURE_REQUEST_CODE
+    )
+}
+
+    // ---------------------------------------------------------
     // START MIRRORING
     // ---------------------------------------------------------
 
     private fun startMirrorToCover() {
 
-        if (serviceBound) {
-            captureStatus.text = "Mirroring service is already connected."
-            tryMirrorPresentation()
-            return
-        }
-
-        captureStatus.text = "Requesting screen capture permission..."
-
-        val manager =
-            getSystemService(MediaProjectionManager::class.java)
-
-        startActivityForResult(
-            manager.createScreenCaptureIntent(),
-            SCREEN_CAPTURE_REQUEST_CODE
-        )
+    if (serviceBound) {
+        captureStatus.text = "Already mirroring."
+        return
     }
+
+    if (!Shizuku.pingBinder() ||
+        Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED
+    ) {
+        captureStatus.text = "Shizuku permission required."
+        Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
+        return
+    }
+
+    captureStatus.text = "Enabling concurrent display..."
+
+    Thread {
+        try {
+            val service = IShizukuService.Stub.asInterface(
+                Shizuku.getBinder()
+            )
+
+            val process = service.newProcess(
+                arrayOf("cmd", "device_state", "state", "4"),
+                null,
+                null
+            )
+
+            val output = process.getInputStream().use { descriptor ->
+    ParcelFileDescriptor.AutoCloseInputStream(descriptor)
+        .bufferedReader()
+        .use { reader -> reader.readText() }
+}.trim()
+            val exitCode = process.waitFor()
+
+            runOnUiThread {
+                if (exitCode == 0) {
+                    captureStatus.text = "Requesting screen capture permission..."
+                    requestScreenCapturePermission()
+                } else {
+                    captureStatus.text = "Failed to enable concurrent display: $output"
+                }
+            }
+
+        } catch (e: Exception) {
+            runOnUiThread {
+                captureStatus.text = "Device state error: ${e.message}"
+            }
+        }
+    }.start()
+}
 
     @Deprecated("Use Activity Result API when migrating to ComponentActivity.")
     override fun onActivityResult(
@@ -306,6 +421,8 @@ class MainActivity : Activity() {
 
             mirrorPresentation = presentation
             mirrorDisplayId = cover.displayId
+
+            startFoldMonitor()
 
             captureStatus.text =
                 "Cover display connected. Starting mirror..."
@@ -451,6 +568,7 @@ class MainActivity : Activity() {
 private fun stopMirroring() {
 
     Log.i(TAG, "Stop Mirroring requested")
+    stopFoldMonitor()
 
     // Detach the mirror surface.
     try {
@@ -734,8 +852,10 @@ private fun stopMirroring() {
         }
 
         displayManager.unregisterDisplayListener(displayListener)
+        stopFoldMonitor()
 
         super.onDestroy()
+        
     }
 
     companion object {
