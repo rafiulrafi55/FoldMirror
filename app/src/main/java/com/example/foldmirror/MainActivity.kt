@@ -37,6 +37,7 @@ class MainActivity : Activity() {
 
     private var captureService: CaptureService? = null
     private var serviceBound = false
+    private var isStartingMirroring = false
 
     private var mirrorPresentation: CoverMirrorPresentation? = null
     private var mirrorDisplayId = -1
@@ -216,14 +217,18 @@ private fun stopFoldMonitor() {
         ) {
 
             val binder = service as? CaptureService.LocalBinder
+            
 
             if (binder == null) {
-                captureStatus.text = "Invalid CaptureService binder."
-                return
-            }
+    isStartingMirroring = false
+    captureStatus.text = "Invalid CaptureService binder."
+    stopMirroring()
+    return
+}
 
             captureService = binder.getService()
             serviceBound = true
+            isStartingMirroring = false
 
             captureStatus.text = "Capture service connected. Preparing cover display..."
 
@@ -234,6 +239,7 @@ private fun stopFoldMonitor() {
         override fun onServiceDisconnected(name: ComponentName?) {
             serviceBound = false
             captureService = null
+            isStartingMirroring = false
 
             captureStatus.text = "Capture service disconnected."
         }
@@ -260,10 +266,11 @@ private fun stopFoldMonitor() {
 
     private fun startMirrorToCover() {
 
-    if (serviceBound) {
-        captureStatus.text = "Already mirroring."
-        return
-    }
+    if (isStartingMirroring || serviceBound) {
+    captureStatus.text = "Mirroring is already starting or active."
+    return
+}
+    
 
     if (!Shizuku.pingBinder() ||
         Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED
@@ -272,6 +279,7 @@ private fun stopFoldMonitor() {
         Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
         return
     }
+    isStartingMirroring = true
 
     captureStatus.text = "Enabling concurrent display..."
 
@@ -300,10 +308,13 @@ private fun stopFoldMonitor() {
                     requestScreenCapturePermission()
                 } else {
                     captureStatus.text = "Failed to enable concurrent display: $output"
+                    isStartingMirroring = false
                 }
             }
 
         } catch (e: Exception) {
+            
+            isStartingMirroring = false
             runOnUiThread {
                 captureStatus.text = "Device state error: ${e.message}"
             }
@@ -323,9 +334,12 @@ private fun stopFoldMonitor() {
         if (requestCode != SCREEN_CAPTURE_REQUEST_CODE) return
 
         if (resultCode != RESULT_OK || data == null) {
-            captureStatus.text = "Screen capture permission denied."
-            return
-        }
+    captureStatus.text = "Permission denied. Resetting device state..."
+    isStartingMirroring = false
+
+    requestDeviceState("reset")
+    return
+}
 
         try {
 
@@ -356,13 +370,19 @@ private fun stopFoldMonitor() {
             )
 
             if (!bound) {
-                captureStatus.text = "Failed to bind CaptureService."
-                return
-            }
+    isStartingMirroring = false
+    captureStatus.text = "Failed to bind CaptureService."
+
+    stopService(Intent(this, CaptureService::class.java))
+    requestDeviceState("reset")
+    return
+}
 
             captureStatus.text = "Starting capture service..."
 
         } catch (e: Exception) {
+            isStartingMirroring = false
+requestDeviceState("reset")
 
             Log.e(TAG, "Failed to start mirroring", e)
             captureStatus.text = "Start failed: ${e.message}"
@@ -433,10 +453,11 @@ private fun stopFoldMonitor() {
             )
 
         } catch (e: Exception) {
+Log.e(TAG, "Failed to show cover Presentation", e)
 
-            Log.e(TAG, "Failed to show cover Presentation", e)
-            captureStatus.text =
-                "Presentation failed: ${e.message}"
+captureStatus.text = "Presentation failed: ${e.message}"
+
+stopMirroring()
 
         }
     }
@@ -566,9 +587,12 @@ private fun stopFoldMonitor() {
    
 
 private fun stopMirroring() {
+    
 
     Log.i(TAG, "Stop Mirroring requested")
+    isStartingMirroring = false
     stopFoldMonitor()
+    
 
     // Detach the mirror surface.
     try {
@@ -842,21 +866,15 @@ private fun stopMirroring() {
     // ---------------------------------------------------------
 
     override fun onDestroy() {
+    stopMirroring()
 
-        mirrorPresentation?.dismiss()
-        mirrorPresentation = null
+    displayManager.unregisterDisplayListener(displayListener)
+    Shizuku.removeRequestPermissionResultListener(
+        shizukuPermissionListener
+    )
 
-        if (serviceBound) {
-            unbindService(serviceConnection)
-            serviceBound = false
-        }
-
-        displayManager.unregisterDisplayListener(displayListener)
-        stopFoldMonitor()
-
-        super.onDestroy()
-        
-    }
+    super.onDestroy()
+}
 
     companion object {
 
