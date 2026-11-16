@@ -3,7 +3,7 @@
     package="com.foldmirror.app"
     android:installLocation="auto"
     android:versionCode="1"
-    android:versionName="0.1-diagnostics" >
+    android:versionName="F-Samsung" >
 
     <uses-sdk
         android:minSdkVersion="31"

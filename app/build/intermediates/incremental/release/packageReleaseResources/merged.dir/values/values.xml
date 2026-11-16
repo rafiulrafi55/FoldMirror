@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#3DDC84</color>
+    <string name="app_name">FoldMirror</string>
+    <string name="concurrent_display">Concurrent display</string>
+    <string name="concurrent_display_failed">Failed to enable concurrent display: %1$s</string>
+    <string name="device_state_error">Device state error: %1$s</string>
+    <string name="device_state_failed">Device state command failed: %1$s</string>
+    <string name="device_state_requesting">Requesting device state %1$s...</string>
+    <string name="device_state_success">Device state command succeeded: %1$s</string>
+    <string name="enabling_concurrent_display">Enabling concurrent display...</string>
+    <string name="folded">Folded</string>
+    <string name="half_open">Half-open</string>
+    <string name="mirroring_already_active">Mirroring is already starting or active.</string>
+    <string name="requesting_capture_permission">Requesting screen capture permission...</string>
+    <string name="shizuku_connected">Connected</string>
+    <string name="shizuku_disconnected">Disconnected</string>
+    <string name="shizuku_error">Shizuku error: %1$s</string>
+    <string name="shizuku_permission_required">Shizuku permission required.</string>
+    <string name="tent_mode">Tent mode</string>
+    <string name="unfolded">Unfolded</string>
+    <string name="unknown">Unknown</string>
+    <string name="unknown_error">Unknown error</string>
+    <style name="Theme.FoldMirror" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+
+        <item name="colorPrimary">#536DFE</item>
+        <item name="colorPrimaryVariant">#3949AB</item>
+        <item name="colorSecondary">#00D4AA</item>
+
+    </style>
+</resources>

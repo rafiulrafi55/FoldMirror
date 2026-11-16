@@ -4,7 +4,7 @@
             "outputFile": "com.foldmirror.app-mergeDebugResources-2:/values-en-rCA/values-en-rCA.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\Rafi\\.gradle\\caches\\9.6.0\\transforms\\cafa64b2988d37ab6246c76078eef435\\transformed\\appcompat-1.7.0\\res\\values-en-rCA\\values-en-rCA.xml",
+                    "source": "C:\\Users\\Rafi\\.gradle\\caches\\8.14.7\\transforms\\09ff7d2d5c16cef05989a598e85f070c\\transformed\\appcompat-1.7.0\\res\\values-en-rCA\\values-en-rCA.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
@@ -21,7 +21,7 @@
                     }
                 },
                 {
-                    "source": "C:\\Users\\Rafi\\.gradle\\caches\\9.6.0\\transforms\\4a637944d55ff92dadc193e5feb6f04f\\transformed\\core-1.13.1\\res\\values-en-rCA\\values-en-rCA.xml",
+                    "source": "C:\\Users\\Rafi\\.gradle\\caches\\8.14.7\\transforms\\adbc9ce67246c3db1d211539789d4fa0\\transformed\\core-1.13.1\\res\\values-en-rCA\\values-en-rCA.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9",
                         "startColumns": "4,4,4,4,4,4,4,4",

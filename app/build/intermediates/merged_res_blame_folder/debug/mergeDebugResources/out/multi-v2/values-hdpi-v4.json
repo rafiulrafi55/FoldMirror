@@ -4,7 +4,7 @@
             "outputFile": "com.foldmirror.app-mergeDebugResources-2:/values-hdpi-v4/values-hdpi-v4.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\Rafi\\.gradle\\caches\\9.6.0\\transforms\\cafa64b2988d37ab6246c76078eef435\\transformed\\appcompat-1.7.0\\res\\values-hdpi-v4\\values-hdpi-v4.xml",
+                    "source": "C:\\Users\\Rafi\\.gradle\\caches\\8.14.7\\transforms\\09ff7d2d5c16cef05989a598e85f070c\\transformed\\appcompat-1.7.0\\res\\values-hdpi-v4\\values-hdpi-v4.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",
