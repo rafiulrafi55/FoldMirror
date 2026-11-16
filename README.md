@@ -2,7 +2,7 @@
 
 
 [![GitHub Release](https://img.shields.io/github/v/release/rafiulrafi55/FoldMirror?style=flat&color=brightgreen)](https://github.com/rafiulrafi55/FoldMirror/releases)
-[![GitHub License](https://img.shields.io/github/license/rafiulrafi55/FoldMirror?style=flat&color=blue)](https://github.com/rafiulrafi55/FoldMirror/blob/main/LICENSE)
+[![GitHub License](https://img.shields.io/github/license/rafiulrafi55/FoldMirror?style=flat&color=blue)](https://github.com/rafiulrafi55/FoldMirror/LICENSE)
 [![Android Min SDK](https://img.shields.io/badge/Android-Min%2014%20(API%2034)-brightgreen?style=flat)](https://developer.android.com/tools/releases/platforms)
 [![Android Target SDK](https://img.shields.io/badge/Android-15%20(API%2035)-brightgreen?style=flat)](https://developer.android.com/tools/releases/platforms)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat&logo=kotlin)](https://kotlinlang.org/)
